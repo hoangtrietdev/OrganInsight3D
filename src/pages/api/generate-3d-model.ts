@@ -1,6 +1,15 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { generateAIModel, checkModelStatus, generateMedicalModelPrompt } from '@/utils/ai-model-generator';
 
+// Configure API route to handle larger payloads (for mobile high-res images)
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '10mb', // Increased from default 1mb to handle mobile images
+    },
+  },
+};
+
 interface GenerateRequest {
   action: 'generate' | 'check_status';
   organName?: string;

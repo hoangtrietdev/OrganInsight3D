@@ -2,6 +2,15 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import Groq from 'groq-sdk';
 import { OrganDiagnosis, DiagnosisResponse } from '@/types/diagnosis';
 
+// Configure API route to handle larger payloads (for mobile high-res images)
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '10mb', // Increased from default 1mb to handle mobile images
+    },
+  },
+};
+
 // Initialize Groq client with API key from environment variables
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,

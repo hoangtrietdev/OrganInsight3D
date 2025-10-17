@@ -13,7 +13,55 @@ interface ImageUploadProps {
 export default function ImageUpload({ uploadedImage, onImageUpload, onError, onAnalyze, isAnalyzing }: ImageUploadProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Compress and resize image for mobile compatibility
+  const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          // Create canvas for compression
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          
+          if (!ctx) {
+            reject(new Error('Could not get canvas context'));
+            return;
+          }
+
+          // Calculate new dimensions (max 1920x1920 for mobile)
+          const MAX_SIZE = 1920;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height && width > MAX_SIZE) {
+            height = (height * MAX_SIZE) / width;
+            width = MAX_SIZE;
+          } else if (height > MAX_SIZE) {
+            width = (width * MAX_SIZE) / height;
+            height = MAX_SIZE;
+          }
+
+          // Set canvas size
+          canvas.width = width;
+          canvas.height = height;
+
+          // Draw and compress image
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          // Convert to base64 with quality compression (0.8 = 80% quality)
+          const compressedBase64 = canvas.toDataURL('image/jpeg', 0.8);
+          resolve(compressedBase64);
+        };
+        img.onerror = () => reject(new Error('Failed to load image'));
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -22,19 +70,19 @@ export default function ImageUpload({ uploadedImage, onImageUpload, onError, onA
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const base64String = event.target?.result as string;
-      onImageUpload(base64String);
+    try {
+      // Compress image before uploading
+      const compressedBase64 = await compressImage(file);
+      onImageUpload(compressedBase64);
+      
       // Reset input so the same file can be uploaded again
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
-    };
-    reader.onerror = () => {
-      onError('Failed to read file');
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      console.error('Image compression error:', err);
+      onError('Failed to process image. Please try another file.');
+    }
   };
 
   return (

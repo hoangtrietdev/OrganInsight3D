@@ -466,6 +466,15 @@ function Scene({ organName, score, useProceduralGeneration, useFBX, imageData, c
         maxPolarAngle={Math.PI}
         minPolarAngle={0}
         target={[0, 0, 0]}
+        enableDamping={true}
+        dampingFactor={0.05}
+        rotateSpeed={0.8}
+        zoomSpeed={1.2}
+        panSpeed={0.8}
+        touches={{
+          ONE: THREE.TOUCH.ROTATE,
+          TWO: THREE.TOUCH.DOLLY_PAN,
+        }}
       />
       
       {/* Camera - positioned to view from front */}
@@ -476,29 +485,43 @@ function Scene({ organName, score, useProceduralGeneration, useFBX, imageData, c
 
 // Main exported component
 export default function ThreeDViewer({ organName, score, useProceduralGeneration = false, useFBX = false, imageData, cachedModelUrl, onModelLoaded, onReloadModel }: ThreeDViewerProps) {
+  // Detect if mobile device for optimized settings
+  const [isMobile, setIsMobile] = React.useState(false);
+  
+  React.useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
   return (
     <div className="w-full h-full rounded-xl overflow-hidden bg-gradient-to-br from-gray-900 to-gray-800 border border-gray-700/50 relative shadow-xl">
       <Canvas
-        shadows
+        shadows={!isMobile} // Disable shadows on mobile for better performance
         gl={{
-          antialias: true,
+          antialias: !isMobile, // Disable antialiasing on mobile for performance
           alpha: false,
+          powerPreference: isMobile ? 'low-power' : 'high-performance',
           toneMapping: THREE.ACESFilmicToneMapping,
           toneMappingExposure: 1.2,
         }}
-        dpr={[1, 2]}
-        className="touch-none"
+        dpr={isMobile ? [1, 1.5] : [1, 2]} // Lower DPR on mobile
+        className="touch-auto" // Changed from touch-none to allow touch events
+        style={{ touchAction: 'none' }} // Prevent default touch behaviors
       >
         <Scene organName={organName} score={score} useProceduralGeneration={useProceduralGeneration} useFBX={useFBX} imageData={imageData} cachedModelUrl={cachedModelUrl} onModelLoaded={onModelLoaded} onReloadModel={onReloadModel} />
       </Canvas>
       
       {/* Model info overlay */}
-      <div className="absolute bottom-4 left-4 bg-black/60 backdrop-blur-md px-4 py-2 rounded-lg border border-gray-700/30">
-        <p className="text-white text-sm font-semibold">
+      <div className="absolute bottom-2 left-2 md:bottom-4 md:left-4 bg-black/60 backdrop-blur-md px-3 py-1.5 md:px-4 md:py-2 rounded-lg border border-gray-700/30">
+        <p className="text-white text-xs md:text-sm font-semibold">
           {organName} {score ? `• Score ${score}/5` : ''}
         </p>
-        <p className="text-gray-300 text-xs hidden sm:block mt-1">
-          Drag to rotate • Scroll to zoom
+        <p className="text-gray-300 text-[10px] md:text-xs mt-0.5 md:mt-1">
+          {isMobile ? 'Touch to rotate • Pinch to zoom' : 'Drag to rotate • Scroll to zoom'}
         </p>
         <p className="text-gray-300 text-xs sm:hidden mt-1">
           Touch to rotate • Pinch to zoom
