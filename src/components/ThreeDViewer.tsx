@@ -52,6 +52,7 @@ function FBXModel({ organName, score, onModelLoaded, onReloadModel }: { organNam
   const meshRef = useRef<THREE.Group>(null);
   const [modelError, setModelError] = React.useState(false);
   const [hasNotifiedLoad, setHasNotifiedLoad] = React.useState(false);
+  const [errorDetails, setErrorDetails] = React.useState<string>('');
   
   // Determine model path based on organ and score
   const organLower = organName.toLowerCase();
@@ -63,9 +64,13 @@ function FBXModel({ organName, score, onModelLoaded, onReloadModel }: { organNam
     // eslint-disable-next-line react-hooks/rules-of-hooks
     fbx = useFBX(modelPath);
   } catch (error) {
-    console.log(`FBX model not found at ${modelPath}`, error);
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error(`FBX model not found at ${modelPath}`, error);
+    console.error('Error details:', errorMsg);
+    console.error('Full URL:', window.location.origin + modelPath);
     if (!modelError) {
       setModelError(true);
+      setErrorDetails(errorMsg);
     }
   }
 
@@ -92,9 +97,15 @@ function FBXModel({ organName, score, onModelLoaded, onReloadModel }: { organNam
             Could not load 3D model for <strong>{organName}</strong>
           </p>
           
-          <p className="text-gray-400 text-xs mb-6">
+          <p className="text-gray-400 text-xs mb-4">
             Path: <code className="bg-gray-800 px-2 py-1 rounded">{modelPath}</code>
           </p>
+          
+          {errorDetails && (
+            <p className="text-red-400 text-xs mb-4 bg-red-900/20 p-2 rounded">
+              Error: {errorDetails}
+            </p>
+          )}
           
           {/* Reload Button */}
           {onReloadModel && (
