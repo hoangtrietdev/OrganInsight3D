@@ -4,8 +4,14 @@
  * 3D Organ Viewer Component
  * 
  * Supports two rendering modes:
- * 1. FBX Models: Load pre-made 3D models from /public/models/
+ * 1. GLB Models: Load pre-made 3D models from /public/models/glb/
  * 2. AI-Generated (Procedural): Dynamically generate organic 3D shapes using noise algorithms
+ * 
+ * GLB features:
+ * - Binary GLTF format for better web performance
+ * - Automatic centering and scaling in viewport
+ * - Error handling for missing models
+ * - Real-time rotation animation
  * 
  * AI-Generated features:
  * - Real-time procedural geometry generation
@@ -20,14 +26,14 @@
 
 import React, { Suspense, useRef } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, PerspectiveCamera, Environment, useProgress, Html, useFBX, useGLTF } from '@react-three/drei';
+import { OrbitControls, PerspectiveCamera, Environment, useProgress, Html, useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 
 interface ThreeDViewerProps {
   organName: string;
   score?: number; // Score from 1-5 for loading specific models
   useProceduralGeneration?: boolean; // Use enhanced procedural generation
-  useFBX?: boolean; // Use pre-loaded FBX models from public/models
+  useFBX?: boolean; // Use pre-loaded GLB models from public/models/glb/
   imageData?: string; // Optional: X-ray/scan image for texture mapping
   cachedModelUrl?: string; // URL to cached GLB/GLTF model from AI generation
   onModelLoaded?: () => void; // Callback when model finishes loading
@@ -47,32 +53,14 @@ function Loader() {
   );
 }
 
-// FBX Model Loader Component with error handling
-function FBXModel({ organName, score, onModelLoaded, onReloadModel }: { organName: string; score: number; onModelLoaded?: () => void; onReloadModel?: () => void }) {
+// GLB Model Loader Component with error handling
+// GLTF Model Loader Component
+function GLTFModelFromPath({ gltfPath, onModelLoaded }: { gltfPath: string; onModelLoaded?: () => void }) {
   const meshRef = useRef<THREE.Group>(null);
-  const [modelError, setModelError] = React.useState(false);
   const [hasNotifiedLoad, setHasNotifiedLoad] = React.useState(false);
-  const [errorDetails, setErrorDetails] = React.useState<string>('');
   
-  // Determine model path based on organ and score
-  const organLower = organName.toLowerCase();
-  const modelPath = `/models/${organLower}${score}/${organLower}${score}.fbx`;
-
-  // Load FBX model with error handling
-  let fbx = null;
-  try {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    fbx = useFBX(modelPath);
-  } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : String(error);
-    console.error(`FBX model not found at ${modelPath}`, error);
-    console.error('Error details:', errorMsg);
-    console.error('Full URL:', window.location.origin + modelPath);
-    if (!modelError) {
-      setModelError(true);
-      setErrorDetails(errorMsg);
-    }
-  }
+  const gltf = useGLTF(gltfPath);
+  const model = gltf.scene;
 
   // Rotate the model slowly
   useFrame((state, delta) => {
@@ -81,8 +69,125 @@ function FBXModel({ organName, score, onModelLoaded, onReloadModel }: { organNam
     }
   });
 
+  if (model) {
+    // Clone the model to avoid mutations
+    const clonedModel = model.clone();
+    
+    // Notify parent that model loaded successfully
+    if (onModelLoaded && !hasNotifiedLoad) {
+      setHasNotifiedLoad(true);
+      setTimeout(() => onModelLoaded(), 100);
+    }
+    
+    // Calculate bounding box to center and scale the model properly
+    const box = new THREE.Box3().setFromObject(clonedModel);
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    
+    // Find the largest dimension to scale uniformly
+    const maxDim = Math.max(size.x, size.y, size.z);
+    const scale = 4 / maxDim;
+    
+    // Apply transformations
+    clonedModel.scale.set(scale, scale, scale);
+    clonedModel.position.set(-center.x * scale, -center.y * scale, -center.z * scale);
+    clonedModel.rotation.set(0, 0, 0);
+
+    return (
+      <group ref={meshRef}>
+        <primitive object={clonedModel} />
+      </group>
+    );
+  }
+
+  return null;
+}
+
+// Unified Model Loader Component (supports GLB from Google Drive)
+function ModelLoader({ organName, score, onModelLoaded, onReloadModel }: { organName: string; score: number; onModelLoaded?: () => void; onReloadModel?: () => void }) {
+  const [modelError, setModelError] = React.useState(false);
+  const [errorDetails, setErrorDetails] = React.useState<string>('');
+  const [modelExists, setModelExists] = React.useState<boolean | null>(null);
+  const [modelUrl, setModelUrl] = React.useState<string>('');
+  
+  // Check if GLB model exists (Google Drive with multiple fallbacks)
+  React.useEffect(() => {
+    const checkModel = async () => {
+      const organLower = organName.toLowerCase();
+      
+      // Try to import Vercel Blob cache utility
+      try {
+        const { getModelUrls, getFileName } = await import('@/utils/vercel-blob-cache');
+        const fileName = getFileName(organName, score);
+        
+        if (fileName) {
+          const urls = getModelUrls(organName, score);
+          console.log(`Trying ${urls.length} URLs for ${organLower}${score}:`, urls);
+          
+          // Try each URL in order (proxy first, then direct downloads)
+          for (const url of urls) {
+            try {
+              console.log(`Testing URL: ${url}`);
+              
+              // For API routes, just set the URL without HEAD check
+              // because the proxy will handle the actual download
+              if (url.startsWith('/api/')) {
+                setModelUrl(url);
+                setModelExists(true);
+                setModelError(false);
+                console.log(`Using proxy URL: ${url}`);
+                return;
+              }
+              
+              // For direct URLs, try to fetch and assume success
+              // (we can't reliably check due to CORS)
+              await fetch(url, { 
+                method: 'HEAD',
+                mode: 'no-cors' // Bypass CORS for HEAD requests
+              });
+              
+              // If no error thrown, assume success
+              setModelUrl(url);
+              setModelExists(true);
+              setModelError(false);
+              console.log(`Model accessible at: ${url}`);
+              return;
+            } catch (error) {
+              console.warn(`Failed to access ${url}:`, error);
+              // Continue to next URL
+            }
+          }
+        }
+      } catch (error) {
+        console.warn('Google Drive cache not available:', error);
+      }
+      
+      // Fallback to local GLB file
+      const localPath = `/models/glb/${organLower}${score}.glb`;
+      try {
+        const response = await fetch(localPath, { method: 'HEAD' });
+        if (response.ok) {
+          setModelUrl(localPath);
+          setModelExists(true);
+          setModelError(false);
+          console.log(`Using local model: ${localPath}`);
+          return;
+        }
+      } catch {
+        console.warn('Local model not found');
+      }
+      
+      setModelExists(false);
+      setModelError(true);
+      setErrorDetails(`Model "${organLower}${score}.glb" not found in Google Drive or local storage. Check file ID configuration.`);
+      console.error(`All URLs failed for ${organLower}${score}`);
+    };
+    
+    checkModel();
+  }, [organName, score]);
+
   // Show error message if model not found
-  if (modelError || !fbx) {
+  if (modelError && modelExists === false) {
     return (
       <Html center>
         <div className="bg-gray-900/95 backdrop-blur-md border border-gray-700 rounded-xl p-6 md:p-8 max-w-md text-center shadow-2xl">
@@ -97,14 +202,11 @@ function FBXModel({ organName, score, onModelLoaded, onReloadModel }: { organNam
             Could not load 3D model for <strong>{organName}</strong>
           </p>
           
-          <p className="text-gray-400 text-xs mb-4">
-            Path: <code className="bg-gray-800 px-2 py-1 rounded">{modelPath}</code>
-          </p>
-          
           {errorDetails && (
-            <p className="text-red-400 text-xs mb-4 bg-red-900/20 p-2 rounded">
-              Error: {errorDetails}
-            </p>
+            <div className="text-left bg-gray-800/50 rounded p-3 mb-4">
+              <p className="text-red-400 text-xs mb-2">Error:</p>
+              <code className="block text-[10px] text-gray-500">{errorDetails}</code>
+            </div>
           )}
           
           {/* Reload Button */}
@@ -123,50 +225,34 @@ function FBXModel({ organName, score, onModelLoaded, onReloadModel }: { organNam
           )}
           
           <p className="text-xs text-gray-500">
-            Make sure the FBX file exists in the public/models folder
+            Check Google Drive configuration or upload GLB files locally
           </p>
         </div>
       </Html>
     );
   }
-
-  if (fbx) {
-    // Clone the FBX model to avoid mutations
-    const clonedFBX = fbx.clone();
-    
-    // Notify parent that model loaded successfully
-    if (onModelLoaded && !hasNotifiedLoad) {
-      setHasNotifiedLoad(true);
-      setTimeout(() => onModelLoaded(), 100); // Small delay to ensure render
-    }
-    
-    // Calculate bounding box to center and scale the model properly
-    const box = new THREE.Box3().setFromObject(clonedFBX);
-    const center = box.getCenter(new THREE.Vector3());
-    const size = box.getSize(new THREE.Vector3());
-    
-    // Find the largest dimension to scale uniformly
-    const maxDim = Math.max(size.x, size.y, size.z);
-    const scale = 4 / maxDim; // Scale to fit in viewport (target size: 4 units)
-    
-    // Apply transformations
-    clonedFBX.scale.set(scale, scale, scale);
-    clonedFBX.position.set(-center.x * scale, -center.y * scale, -center.z * scale);
-    
-    // Rotate to face front (adjust based on your model's initial orientation)
-    clonedFBX.rotation.set(0, 0, 0);
-
+  
+  // Loading state
+  if (modelExists === null) {
     return (
-      <group ref={meshRef}>
-        <primitive object={clonedFBX} />
-      </group>
+      <Html center>
+        <div className="text-white text-center">
+          <div className="w-12 h-12 border-4 border-gray-700 border-t-blue-500 rounded-full animate-spin mb-2"></div>
+          <div className="text-sm">Loading GLB model...</div>
+        </div>
+      </Html>
     );
+  }
+
+  // Render the GLB model
+  if (modelExists && modelUrl) {
+    return <GLTFModelFromPath gltfPath={modelUrl} onModelLoaded={onModelLoaded} />;
   }
 
   return null;
 }
 
-// GLB/GLTF Model Loader for AI-generated cached models
+
 function GLBModel({ modelUrl }: { modelUrl: string }) {
   const meshRef = useRef<THREE.Group>(null);
   const [modelError, setModelError] = React.useState(false);
@@ -443,8 +529,8 @@ function Scene({ organName, score, useProceduralGeneration, useFBX, imageData, c
           // Load from cached AI-generated model URL
           <GLBModel modelUrl={cachedModelUrl} />
         ) : useFBX && score ? (
-          // Only show FBX when explicitly in procedural mode
-          <FBXModel organName={organName} score={score} onModelLoaded={onModelLoaded} onReloadModel={onReloadModel} />
+          // Load GLB model from public/models/glb/
+          <ModelLoader organName={organName} score={score} onModelLoaded={onModelLoaded} onReloadModel={onReloadModel} />
         ) : useProceduralGeneration && score ? (
           // Show procedural generation
           <ProceduralOrgan organName={organName} score={score} imageData={imageData} />

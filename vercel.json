@@ -16,6 +16,19 @@
           "value": "application/octet-stream"
         }
       ]
+    },
+    {
+      "source": "/api/proxy-model",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        },
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        }
+      ]
     }
   ],
   "rewrites": [
@@ -23,5 +36,11 @@
       "source": "/models/:path*",
       "destination": "/models/:path*"
     }
-  ]
+  ],
+  "functions": {
+    "src/pages/api/proxy-model.ts": {
+      "memory": 3008,
+      "maxDuration": 60
+    }
+  }
 }

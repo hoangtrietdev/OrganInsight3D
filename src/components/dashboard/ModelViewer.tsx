@@ -46,7 +46,7 @@ export default function ModelViewer({
           3D Organ Model - {organName}
         </h2>
         <span className="text-xs px-2 md:px-3 py-1 rounded-full bg-orange-500/20 text-orange-300 border border-orange-500/30">
-          ⚡ FBX Model
+          ⚡ GLB Model
         </span>
       </div>
 
