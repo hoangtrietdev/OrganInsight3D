@@ -39,7 +39,7 @@
   ],
   "functions": {
     "src/pages/api/proxy-model.ts": {
-      "memory": 3008,
+      "memory": 1024,
       "maxDuration": 60
     }
   }
