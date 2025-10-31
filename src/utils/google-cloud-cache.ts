@@ -1,26 +1,26 @@
 /**
- * Vercel Blob Storage Model Cache Utility
- * 
- * This utility handles loading GLB models from Vercel Blob Storage
- * - Direct CDN access with no restrictions
- * - Fast global delivery
+ * Google Cloud Storage Model Cache Utility
+ *
+ * This utility handles loading GLB models from Google Cloud Storage with CDN
+ * - Direct CDN access with global delivery
  * - No file size limits
- * - Works seamlessly in Vercel deployment
+ * - Fast loading via Google's CDN
+ * - Public bucket access
  */
 
-// Vercel Blob Storage public URL
-const VERCEL_BLOB_BASE_URL = process.env.NEXT_PUBLIC_VERCEL_BLOB_URL || 'https://nhewuyihqt8z4wwu.public.blob.vercel-storage.com';
+// Google Cloud Storage bucket URL (uses CDN)
+const GCS_BUCKET_URL = process.env.NEXT_PUBLIC_GCS_BUCKET_URL || 'https://storage.googleapis.com/organ-scanner-3d';
 
 /**
  * Model filename mapping
  * Maps model names (e.g., "brain1", "lung3") to their filenames
- * All files are stored in Vercel Blob Storage with consistent naming
+ * All files are stored in Google Cloud Storage with consistent naming
  */
 interface ModelFileNames {
   [key: string]: string;
 }
 
-// Model name to filename mapping (all stored in Vercel Blob)
+// Model name to filename mapping (all stored in GCS)
 const MODEL_FILE_NAMES: ModelFileNames = {
   // Brain models (1-5 severity scores)
   'brain1': 'brain1.glb',
@@ -28,35 +28,35 @@ const MODEL_FILE_NAMES: ModelFileNames = {
   'brain3': 'brain3.glb',
   'brain4': 'brain4.glb',
   'brain5': 'brain5.glb',
-  
+
   // Heart models (1-5 severity scores)
   'heart1': 'heart1.glb',
   'heart2': 'heart2.glb',
   'heart3': 'heart3.glb',
   'heart4': 'heart4.glb',
   'heart5': 'heart5.glb',
-  
+
   // Lung models (1-5 severity scores)
   'lung1': 'lung1.glb',
   'lung2': 'lung2.glb',
   'lung3': 'lung3.glb',
   'lung4': 'lung4.glb',
   'lung5': 'lung5.glb',
-  
+
   // Liver models (1-5 severity scores)
   'liver1': 'liver1.glb',
   'liver2': 'liver2.glb',
   'liver3': 'liver3.glb',
   'liver4': 'liver4.glb',
   'liver5': 'liver5.glb',
-  
+
   // Kidney models (1-5 severity scores)
   'kidney1': 'kidney1.glb',
   'kidney2': 'kidney2.glb',
   'kidney3': 'kidney3.glb',
   'kidney4': 'kidney4.glb',
   'kidney5': 'kidney5.glb',
-  
+
   // Stomach models (1-5 severity scores)
   'stomach1': 'stomach1.glb',
   'stomach2': 'stomach2.glb',
@@ -66,12 +66,12 @@ const MODEL_FILE_NAMES: ModelFileNames = {
 };
 
 /**
- * Get Vercel Blob Storage URL for a model file
+ * Get Google Cloud Storage URL for a model file
  * @param fileName The name of the GLB file (e.g., "brain1.glb")
- * @returns Full URL to the file in Vercel Blob Storage
+ * @returns Full URL to the file in Google Cloud Storage (CDN)
  */
-function getVercelBlobUrl(fileName: string): string {
-  return `${VERCEL_BLOB_BASE_URL}/${fileName}`;
+function getGcsUrl(fileName: string): string {
+  return `${GCS_BUCKET_URL}/${fileName}`;
 }
 
 /**
@@ -84,21 +84,21 @@ function getLocalUrl(fileName: string): string {
 }
 
 /**
- * Get model URL from Vercel Blob Storage
+ * Get model URL from Google Cloud Storage
  * @param organName Name of the organ (e.g., "Brain", "Lung")
  * @param score Severity score (1-5)
- * @returns Vercel Blob URL or null if not found
+ * @returns GCS CDN URL or null if not found
  */
 export function getModelUrl(organName: string, score: number): string | null {
   const modelKey = `${organName.toLowerCase()}${score}`;
   const fileName = MODEL_FILE_NAMES[modelKey];
-  
+
   if (!fileName) {
     console.warn(`No filename found for model: ${modelKey}`);
     return null;
   }
-  
-  return getVercelBlobUrl(fileName);
+
+  return getGcsUrl(fileName);
 }
 
 /**
@@ -110,15 +110,15 @@ export function getModelUrl(organName: string, score: number): string | null {
 export function getModelUrls(organName: string, score: number): string[] {
   const modelKey = `${organName.toLowerCase()}${score}`;
   const fileName = MODEL_FILE_NAMES[modelKey];
-  
+
   if (!fileName) {
     return [];
   }
-  
-  // Try Vercel Blob first, then local fallback
+
+  // Try GCS CDN first, then local fallback
   return [
-    // Vercel Blob Storage (primary)
-    getVercelBlobUrl(fileName),
+    // Google Cloud Storage CDN (primary)
+    getGcsUrl(fileName),
     // Local fallback
     getLocalUrl(fileName),
   ];
@@ -155,7 +155,7 @@ export function getAvailableModels(): string[] {
 }
 
 /**
- * Preload a model from Vercel Blob Storage (optional optimization)
+ * Preload a model from Google Cloud Storage (optional optimization)
  * @param organName Name of the organ
  * @param score Severity score (1-5)
  */
@@ -164,7 +164,7 @@ export async function preloadModel(organName: string, score: number): Promise<vo
   if (!url) {
     throw new Error(`Model not found: ${organName}${score}`);
   }
-  
+
   try {
     // Check if file is accessible
     const response = await fetch(url, { method: 'HEAD' });
@@ -178,9 +178,9 @@ export async function preloadModel(organName: string, score: number): Promise<vo
 }
 
 /**
- * Get the Vercel Blob Storage base URL
- * @returns Vercel Blob base URL
+ * Get the Google Cloud Storage bucket URL
+ * @returns GCS bucket base URL
  */
-export function getBlobBaseUrl(): string {
-  return VERCEL_BLOB_BASE_URL;
+export function getBucketUrl(): string {
+  return GCS_BUCKET_URL;
 }

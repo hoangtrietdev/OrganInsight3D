@@ -115,9 +115,9 @@ function ModelLoader({ organName, score, onModelLoaded, onReloadModel }: { organ
     const checkModel = async () => {
       const organLower = organName.toLowerCase();
       
-      // Try to import Vercel Blob cache utility
+      // Try to import Google Cloud Storage cache utility
       try {
-        const { getModelUrls, getFileName } = await import('@/utils/vercel-blob-cache');
+        const { getModelUrls, getFileName } = await import('@/utils/google-cloud-cache');
         const fileName = getFileName(organName, score);
         
         if (fileName) {
